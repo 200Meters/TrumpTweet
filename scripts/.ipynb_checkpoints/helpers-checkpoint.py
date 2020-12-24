@@ -8,13 +8,13 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 import pandas as pd
-import keras
-from keras.models import Sequential
-from keras.layers import Dense
-from keras.layers import Dropout
-from keras.layers import GRU
-from keras.callbacks import ModelCheckpoint
-from keras.utils import np_utils
+#import keras
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import Dropout
+from tensorflow.keras.layers import GRU
+from tensorflow.keras.callbacks import ModelCheckpoint
+#from tensorflow.keras.utils import np_utils
 
 class DataHelper:
     """Class containing data functions for the TrumpTweet project"""
@@ -100,7 +100,7 @@ class DataHelper:
         raw_text = open(clean_file_path, 'r', encoding="utf-8").read()
         
         # Create the keras tokenizer
-        tok = keras.preprocessing.text.Tokenizer(char_level=self.char_level, num_words=self.n_words, filters=self.text_filter)
+        tok = tf.keras.preprocessing.text.Tokenizer(char_level=self.char_level, num_words=self.n_words, filters=self.text_filter)
         fit_text = tok.fit_on_texts([raw_text])
 
         max_id = len(tok.word_index)
@@ -152,11 +152,14 @@ class ModelHelper():
     def create_model(self, tokenizer):
         """ Defines the model """
         max_id = len(tokenizer.word_index)
-        model = keras.models.Sequential([
-            keras.layers.GRU(256, return_sequences=True, input_shape=[None, max_id], dropout=0.2, recurrent_dropout=0.2),
-            keras.layers.GRU(128, return_sequences=True, dropout=0.2, recurrent_dropout=0.2),
-            keras.layers.GRU(128, return_sequences=True, dropout=0.2, recurrent_dropout=0.2),
-            keras.layers.TimeDistributed(keras.layers.Dense(max_id, activation='softmax'))
+        model = tf.keras.models.Sequential([
+            tf.keras.layers.GRU(256, return_sequences=True, input_shape=[None, max_id], dropout=0.2, recurrent_dropout=0.0, activation='tanh',
+                                recurrent_activation='sigmoid', unroll=False, use_bias=True, reset_after=True),
+            tf.keras.layers.GRU(128, return_sequences=True, dropout=0.2, recurrent_dropout=0.0, activation='tanh',
+                                recurrent_activation='sigmoid', unroll=False, use_bias=True, reset_after=True),
+            tf.keras.layers.GRU(128, return_sequences=True, dropout=0.2, recurrent_dropout=0.0, activation='tanh',
+                                recurrent_activation='sigmoid', unroll=False, use_bias=True, reset_after=True),
+            tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(max_id, activation='softmax'))
             ])
 
         return model
