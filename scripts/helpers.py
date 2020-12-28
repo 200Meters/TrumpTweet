@@ -8,13 +8,13 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 import pandas as pd
-#import keras
+import keras
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import Dropout
 from tensorflow.keras.layers import GRU
 from tensorflow.keras.callbacks import ModelCheckpoint
-#from tensorflow.keras.utils import np_utils
+from keras.utils import np_utils
 
 class DataHelper:
     """Class containing data functions for the TrumpTweet project"""
@@ -142,12 +142,14 @@ class DataHelper:
 class ModelHelper():
     """ Creates the model helper class and associated model functions """
 
-    def __init__(self, epochs):
+    def __init__(self, epochs, tokenizer):
         """ Initialize ModelHelper class 
         Attributes:
             EPOCHS: Number of epochs to train the model
+            tokenizer: Text tokenizer
         """
         self.EPOCHS = epochs
+        self.tokenizer = tokenizer
 
     def create_model(self, tokenizer):
         """ Defines the model """
@@ -164,23 +166,30 @@ class ModelHelper():
 
         return model
 
+    def restore_model(self, model_file, restore_path="./checkpoints/"):
+        """ Restores a saved model in hd5 format and creates a model object """
+        model_path = os.path.join(restore_path, model_file)
+        model = load_model(model_path)
+        return model
+
     def preprocess_pred(self, texts, tokenizer):
         """ Tokenizes the text so the next character can be predicted """
         max_id = len(tokenizer.word_index)
-        x = np.array(tok.texts_to_sequences(texts)) - 1
+        x = np.array(tokenizer.texts_to_sequences(texts)) - 1
         return tf.one_hot(x, max_id)
     
-    def get_next_char(self, text, tokenizer, temperature=1):
+    def get_next_char(self, text, model, temperature=1):
         """ Gets the predicted next character in the Tweet. Called recursively to generate a new Tweet """
-        x_new = preprocess_pred([text])
+        x_new = self.preprocess_pred([text],self.tokenizer)
         y_proba = model.predict(x_new)[0, -1:, :]
         rescaled_logits = tf.math.log(y_proba)/temperature
         char_id = tf.random.categorical(rescaled_logits, num_samples=1) + 1
-        
-        return tokenizer.sequences_to_texts(char_id.numpy())[0]
+        next_char = self.tokenizer.sequences_to_texts(char_id.numpy())[0]
+        return next_char
 
-    def create_tweet(text, n_chars=140, temperature=.2):
+    def create_tweet(self, text, model, n_chars=140, temperature=.2):
         """ Creates a tweet """
+        n_chars = int(n_chars)
         for _ in range(n_chars):
-            text += next_char(text, temperature)
+            text += self.get_next_char(text, model, temperature)
             return text
