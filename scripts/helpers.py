@@ -126,7 +126,7 @@ class DataHelper:
 
         # Create the training batches and shuffle
         batch_size = self.BATCH_SIZE
-        dataset = dataset.shuffle(1000).batch(batch_size)
+        dataset = dataset.shuffle(10000).batch(batch_size)
         dataset = dataset.map(lambda windows: (windows[:,:-1],windows[:,1:]))
 
         # one-hot encode unique characters
@@ -155,6 +155,8 @@ class ModelHelper():
         """ Defines the model """
         max_id = len(tokenizer.word_index)
         model = tf.keras.models.Sequential([
+            tf.keras.layers.GRU(512, return_sequences=True, input_shape=[None, max_id], dropout=0.2, recurrent_dropout=0.0, activation='tanh',
+                                recurrent_activation='sigmoid', unroll=False, use_bias=True, reset_after=True),
             tf.keras.layers.GRU(256, return_sequences=True, input_shape=[None, max_id], dropout=0.2, recurrent_dropout=0.0, activation='tanh',
                                 recurrent_activation='sigmoid', unroll=False, use_bias=True, reset_after=True),
             tf.keras.layers.GRU(128, return_sequences=True, dropout=0.2, recurrent_dropout=0.0, activation='tanh',
@@ -190,6 +192,7 @@ class ModelHelper():
     def create_tweet(self, text, model, n_chars=140, temperature=.2):
         """ Creates a tweet """
         n_chars = int(n_chars)
-        for _ in range(n_chars):
+        for i in range(n_chars):
             text += self.get_next_char(text, model, temperature)
-            return text
+        
+        return text
