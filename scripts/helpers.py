@@ -4,6 +4,9 @@
 # Import needed libraries
 import re
 import os
+from datetime import datetime
+import urllib.request
+from bs4 import BeautifulSoup
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.models import load_model
@@ -25,7 +28,7 @@ class DataHelper:
             file_path: 
                 Relative location of the tweet file. Default is inputdata
             file_name: 
-                Name of the tweet file
+                Name of the tweet file. Typically use the most recent archive file
             char_level: 
                 Boolean designating whether or not to use character level encoding in the tokenizer. Default is true
             num_words: 
@@ -49,6 +52,43 @@ class DataHelper:
         self.dataset_size = 0
         self.num_data_windows = 0
 
+    def update_archive_file(self,current_archive_file):
+        """Takes the most recent archive file of Trump Tweets and appends the most recent 1000 Tweets. If there is a duplicate, do not import it
+       Args: 
+            current_archive_file
+                Name of the most recent archive file. This is the file that the new tweets will be added to.
+        """
+        # Get the latest 1000 tweets
+        df_latest_tweets = pd.read_json(path_or_buf='https://www.thetrumparchive.com/latest-tweets', orient='records')
+        df_latest_tweets = df_latest_tweets.drop(columns=['isFlagged'])
+
+        # Sort by date descending
+        df_latest_tweets = df_latest_tweets.sort_values('date')
+
+        # Cast boolean values as string
+        df_latest_tweets['isRetweet'] = df_latest_tweets['isRetweet'].astype(str)
+        df_latest_tweets['isDeleted'] = df_latest_tweets['isDeleted'].astype(str)
+
+        # Replace TRUE and FALSE with t and f to match archive file format
+        df_latest_tweets.replace(to_replace='True',value='t',inplace=True)
+        df_latest_tweets.replace(to_replace='False',value='f',inplace=True)
+
+        # Create consistent datetime format
+        df_latest_tweets['date'] = df_latest_tweets['date'].dt.strftime('%Y-%m-%d %H:%M:%S')
+
+        # Append to most recent archive
+        current_archive_file = os.path.join(self.file_loc, current_archive_file)
+        df_archive = pd.read_csv(current_archive_file)
+        df_all_tweets = df_archive.append(df_latest_tweets,ignore_index=True)
+
+        # Drop any duplicates in the file based on the Tweet id
+        df_all_tweets.drop_duplicates(subset=['id'], inplace=True)
+
+        # Save to a new csv file
+        today = datetime.today().strftime('%m-%d-%Y')
+        file_name = self.file_loc + 'tweets_' + today + '.csv'
+        df_all_tweets.to_csv(file_name, index=False)
+
     def prep_raw_data(self, start_date, end_date):
         """Prepares the raw tweet file for processing
         Args:
@@ -65,16 +105,18 @@ class DataHelper:
         df_tt = pd.read_csv(input_file_path)
         df_tt['date'] = pd.to_datetime(df_tt['date'])
 
-        #Get the number of tweets sent by Trump himself - not the retweets
+        # Get the number of tweets sent by Trump himself - not the retweets
         df_tt = df_tt[df_tt['isRetweet']=='f']
         df_tt = df_tt[df_tt['date'].between(start_date,end_date)]
         self.num_tweets = str(df_tt.shape[0])
 
         # Output just the Tweets to a text file
         output_file_path = os.path.join(self.file_loc,'tweets.txt')
+        if os.path.exists(output_file_path):  # If the file already exists, remove it to prevent doubling up the file
+            os.remove(output_file_path)
         df_tt['text'].to_csv(output_file_path,  header=None, index=None, sep=' ', mode='a')  # Appends to file if it already exists
 
-        # load ascii text and remove url's from the tweets
+        # load ascii text and remove url's from the tweets since they will not be used to create new tweets
         raw_text = open(output_file_path, 'r', encoding='utf-8').read()
         raw_text = re.sub(r'http\S+', '', raw_text)
 
@@ -112,7 +154,7 @@ class DataHelper:
         # Encode the full text so each char is represented by its ID
         [encoded] = np.array(tok.texts_to_sequences([raw_text])) - 1
 
-        #split the dataset for training and test if needed
+        # Split the dataset for training and test if needed
         train_size = int(ds_size*.9)
         dataset = tf.data.Dataset.from_tensor_slices(encoded)
 
@@ -138,6 +180,8 @@ class DataHelper:
         print("Dataset and tokenizer creation complete.")
 
         return dataset, tok
+
+
 
 class ModelHelper():
     """ Creates the model helper class and associated model functions """
@@ -196,3 +240,41 @@ class ModelHelper():
             text += self.get_next_char(text, model, temperature)
         
         return text
+
+class TweetHelper():
+    """ Class to call the TrumpTweet model based on current headlines """
+    def __init__(self):
+         """ Initialize TweetHelper class 
+         Attributes:
+         """
+
+    def get_headlines(self, news_source="breitbart.com", num_headlines=3):
+        """ Get the headlines from a specific news source using google news
+        Args:
+            news_source
+                The source of the headlines (e.g., Bretibart.com, NYT.com)
+            num_headlines
+                The max number of headlines to retrieve from the news source
+        Returns:
+            headlines
+                List of headlines
+        """
+        headlines = []
+        url_string = "https://news.google.com/search?q=%20site%3A" + news_source + "&hl=en-US&gl=US&ceid=US%3Aen"
+        reader = urllib.request.urlopen(url_string)
+        html = reader.read()
+        parser = "html.parser"
+        soup = BeautifulSoup(html,parser)
+        tags = soup.find_all("a")
+        h = 0
+        for i in range(len(tags)):
+            if h < num_headlines:
+                url = tags[i].get("href")
+                if url is None:
+                    continue
+                if "articles" in url:
+                    if tags[i].string != None:
+                        headlines.append(tags[i].string)
+                        h = h+1
+                
+        return headlines
