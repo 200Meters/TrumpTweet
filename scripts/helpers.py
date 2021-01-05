@@ -89,6 +89,8 @@ class DataHelper:
         file_name = self.file_loc + 'tweets_' + today + '.csv'
         df_all_tweets.to_csv(file_name, index=False)
 
+        print("Archive file" + file_name + " has been created")
+
     def prep_raw_data(self, start_date, end_date):
         """Prepares the raw tweet file for processing
         Args:
@@ -252,7 +254,7 @@ class TweetHelper():
         """ Get the headlines from a specific news source using google news
         Args:
             news_source
-                The source of the headlines (e.g., Bretibart.com, NYT.com)
+                The source of the headlines (e.g., Bretibart.com, NYTimes.com)
             num_headlines
                 The max number of headlines to retrieve from the news source
         Returns:
